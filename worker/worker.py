@@ -27,9 +27,15 @@ async def callback(ch, method, properties, body):
             i = i.split("@")
             if i[1] == config.MAIL_DOMEN:
                 res = await db.database.fetch_all(
-                    db.mails.select().where(i[0]==db.mails.c.name)
+                    db.mails.select().where(
+                        and_(
+                            i[0]==db.mails.c.name, 
+                            db.mails.c.is_active==True
+                        )
+                    )
                 )
-                print(res)
+                # print(res)
+                
                 if res != []:
                     res = dict(*res)
                     print(res)
