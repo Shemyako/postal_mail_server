@@ -8,7 +8,6 @@ import base64
 import pika
 import json
 from email.header import decode_header
-import db
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
@@ -20,23 +19,11 @@ class RelayHandler:
         # print('Message from %s' % envelope.mail_from)
         # print('Message for %s' % envelope.rcpt_tos)
         # print('Message data:\n')
-        to = []
-        for i in envelope.rcpt_tos:
-            i = i.split("@")
-            if i[1] == config.MAIL_DOMEN:
-                res = await db.database.fetch_all(
-                    db.database.mails.select().where(i[0]==db.database.mails.c.name)
-                )
-                if res != []:
-                    to.append(i[0])
-
-        if to == []:
-            return '250 Message accepted for delivery'
 
         message = {
-            "to" : to,
+            "to" : envelope.rcpt_tos,
             "from" : envelope.mail_from, 
-            "subject" : ""
+            "subject" : "",
             "text" : ""
         }
 
@@ -63,7 +50,6 @@ class RelayHandler:
 
 async def amain(loop):
     global channel
-    await db.database.connect()
     
     connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
     channel = connection.channel()
@@ -79,7 +65,6 @@ async def amain(loop):
     input("Server started. Press Enter to quit.")
     cont.stop()
     connection.close()
-    await db.database.disconnect()
 
 
 if __name__ == '__main__':
