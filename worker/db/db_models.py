@@ -24,7 +24,8 @@ customers = Table('customers', metadata,
 mails = Table('mails', metadata,
     Column("id", Integer(), primary_key=True),
     Column("name", String(255), nullable=False),
-    Column("owner", Integer(), ForeignKey('customers.tg_id'))
+    Column("owner", Integer(), ForeignKey('customers.tg_id')),
+    Column("is_active", Boolean(), nullable=False)
 )
 
 
