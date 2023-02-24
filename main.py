@@ -5,40 +5,70 @@ import asyncio
 import logging
 import email
 import base64
+import pika
+import json
+from email.header import decode_header
+import db
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.handlers import Sink
 
+channel = None
+
 class RelayHandler:
     async def handle_DATA(self, server, session, envelope):
-        print('Message from %s' % envelope.mail_from)
-        print('Message for %s' % envelope.rcpt_tos)
-        print('Message data:\n')
-        
-        # Попробовать без splitlines()
-        # for ln in envelope.content.decode('utf8', errors='replace').splitlines():
-        #     print(f'> {ln}'.strip())
+        # print('Message from %s' % envelope.mail_from)
+        # print('Message for %s' % envelope.rcpt_tos)
+        # print('Message data:\n')
+        to = []
+        for i in envelope.rcpt_tos:
+            i = i.split("@")
+            if i[1] == config.MAIL_DOMEN:
+                res = await db.database.fetch_all(
+                    db.database.mails.select().where(i[0]==db.database.mails.c.name)
+                )
+                if res != []:
+                    to.append(i[0])
 
-        # print(envelope.content.decode('utf8', errors='replace'))
-        # print('------------------...--------------------')
-        
+        if to == []:
+            return '250 Message accepted for delivery'
+
+        message = {
+            "to" : to,
+            "from" : envelope.mail_from, 
+            "subject" : ""
+            "text" : ""
+        }
+
         msg = email.message_from_bytes(envelope.original_content)
 
-        # print(msg)
+        if "Subject" in msg:
+            message["subject"] =  (decode_header(msg["Subject"])[0][0].decode())
 
-        # print([i.get_content_type() for i in msg.walk()])
         for part in msg.walk():
-            if part.get_content_maintype() == 'text':# and part.get_content_subtype() == 'plain':
+            if part.get_content_maintype() == 'text' and part.get_content_subtype() == 'plain':
                 # print(base64.b64decode(part.get_payload()).decode('latin-1', 'replace'))
-                
-                # print()
-                print(base64.b64decode(part.get_payload()).decode())
+                message["text"] += base64.b64decode(part.get_payload()).decode()
+
+        channel.basic_publish(exchange='',
+                      routing_key='mails',
+                      body=json.dumps(message),
+                      properties=pika.BasicProperties(
+                         delivery_mode = 2, # make message persistent
+                      ))
 
         print('End of message')
         return '250 Message accepted for delivery'
 
 
 async def amain(loop):
+    global channel
+    await db.database.connect()
+    
+    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+    channel = connection.channel()
+    channel.queue_declare(queue='mails', durable=True)
+
     handler = RelayHandler()
     cont = Controller(
         handler,
@@ -46,11 +76,14 @@ async def amain(loop):
         port=25
     )
     cont.start()
-    input("Server started. Press Return to quit.")
+    input("Server started. Press Enter to quit.")
     cont.stop()
+    connection.close()
+    await db.database.disconnect()
+
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     # try:
