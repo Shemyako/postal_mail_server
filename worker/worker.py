@@ -7,6 +7,9 @@ import config
 import db
 import asyncio
 
+from signal import signal, SIGPIPE, SIG_DFL  
+signal(SIGPIPE,SIG_DFL) 
+
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=config.TG_TOKEN)
@@ -37,15 +40,23 @@ async def callback(ch, method, properties, body):
                 # print(res)
                 
                 if res != []:
+                    query = insert(db.messages)
+                    await db.database.execute(query, {
+                        "mail":res["id"], 
+                        "text":a["text"], 
+                        "from_user":i[0], 
+                        "date":datetime.strptime(a["date"],"%a, %d %b %Y %H:%M:%S %z").replace(tzinfo=None)
+                    })
+
                     res = dict(*res)
-                    print(res)
+                    # print(res)
                     to.append(str(res["owner"]) + "@" + i[0])
 
     await db.database.disconnect()
-    print(to)
+    # print(to)
     for i in to:
         i = i.split("@")
-        await bot.send_message(i[0], i[1] + ":\n" + a["text"])
+        await bot.send_message(i[0], f"F:{a.get('from')}\nT:{i[1]}\nS:{a.get('subject')}\nD:{a.get["date"]}\n{a.get('text')}")
 
 
     # print( " [x] Received %r" % (a,))
