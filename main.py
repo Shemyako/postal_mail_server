@@ -24,19 +24,26 @@ class RelayHandler:
             "to" : envelope.rcpt_tos,
             "from" : envelope.mail_from, 
             "subject" : "",
-            "text" : ""
+            "text" : "",
+            "date" : ""
         }
 
         msg = email.message_from_bytes(envelope.original_content)
-
-        if "Subject" in msg:
+        # print(msg)
+        # Проверяем тему и дату в письме. Если их нет, но письмо не рассматриваем
+        if "Subject" in msg and "Date" in msg:
             message["subject"] =  (decode_header(msg["Subject"])[0][0].decode())
+            message["Date"] = msg["Date"]
+        else:
+            return
 
+        # Проходимся по письму и формируем текст для отправки
         for part in msg.walk():
             if part.get_content_maintype() == 'text' and part.get_content_subtype() == 'plain':
                 # print(base64.b64decode(part.get_payload()).decode('latin-1', 'replace'))
                 message["text"] += base64.b64decode(part.get_payload()).decode()
 
+        # Добавляем в rabbitmq на обработку письмо
         channel.basic_publish(exchange='',
                       routing_key='mails',
                       body=json.dumps(message),
@@ -50,7 +57,7 @@ class RelayHandler:
 
 async def amain(loop):
     global channel
-    
+    # соединяемся с rabbitmq
     connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
     channel = connection.channel()
     channel.queue_declare(queue='mails', durable=True)
