@@ -9,7 +9,7 @@ RUN pip install pip -U \
     && pip install --no-cache-dir -r requirements.txt
 
 
-
+WORKDIR "/root/"
 
 # Добавление файлов проекта в контейнер
 ADD . ./
