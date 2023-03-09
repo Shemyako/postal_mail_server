@@ -6,6 +6,8 @@ from aiogram import Bot, Dispatcher, types
 import config
 import db
 import asyncio
+from sqlalchemy import insert, select, and_
+from datetime import datetime
 
 from signal import signal, SIGPIPE, SIG_DFL  
 signal(SIGPIPE,SIG_DFL) 
@@ -14,8 +16,8 @@ logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=config.TG_TOKEN)
 
-connection = pika.BlockingConnection(pika.ConnectionParameters(
-        host='localhost'))
+connection = pika.BlockingConnection(pika.URLParameters(
+    "amqp://guest:guest@rabbitmq/"))
 channel = connection.channel()
 channel.queue_declare(queue='mails', durable=True)
 
@@ -23,7 +25,6 @@ print( ' [*] Waiting for messages. To exit press CTRL+C')
 
 async def callback(ch, method, properties, body):
     a = json.loads(body)
-
     await db.database.connect()
     to = []
     for i in a["to"]:
@@ -41,14 +42,14 @@ async def callback(ch, method, properties, body):
                 
                 if res != []:
                     query = insert(db.messages)
+                    res = dict(*res)
                     await db.database.execute(query, {
                         "mail":res["id"], 
-                        "text":a["text"], 
+                        "text":a["text"] if len(a["text"]) < 250 else: a["text"][:250], 
                         "from_user":i[0], 
                         "date":datetime.strptime(a["date"],"%a, %d %b %Y %H:%M:%S %z").replace(tzinfo=None)
                     })
 
-                    res = dict(*res)
                     # print(res)
                     to.append(str(res["owner"]) + "@" + i[0])
 
@@ -56,7 +57,7 @@ async def callback(ch, method, properties, body):
     # print(to)
     for i in to:
         i = i.split("@")
-        await bot.send_message(i[0], f"F:{a.get('from')}\nT:{i[1]}\nS:{a.get('subject')}\nD:{a.get["date"]}\n{a.get('text')}")
+        await bot.send_message(i[0], f"F:{a.get('from')}\nT:{i[1]}\nS:{a.get('subject')}\nD:{a.get('date')}\n{a.get('text')}")
 
 
     # print( " [x] Received %r" % (a,))
