@@ -58,7 +58,7 @@ class RelayHandler:
 async def amain(loop):
     global channel
     # соединяемся с rabbitmq
-    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+    connection = pika.BlockingConnection(pika.URLParameters("amqp://guest:guest@rabbitmq/"))
     channel = connection.channel()
     channel.queue_declare(queue='mails', durable=True)
 
@@ -69,22 +69,19 @@ async def amain(loop):
         port=25
     )
     cont.start()
-    input("Server started. Press Enter to quit.")
-    cont.stop()
-    connection.close()
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    loop.create_task(amain(loop=loop))
     # try:
-    loop.run_until_complete(amain(loop=loop))
-    
-    # loop.create_task(amain(loop=loop))
-    # loop.run_forever()
-    # except KeyboardInterrupt:
-    #     print("User abort indicated")
+    # loop.run_until_complete(amain(loop=loop))
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        print("User abort indicated")
 
 
 
