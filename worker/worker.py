@@ -23,6 +23,11 @@ channel.queue_declare(queue='mails', durable=True)
 
 print( ' [*] Waiting for messages. To exit press CTRL+C')
 
+async def sending_messages(a, i):
+    i = i.split("@")
+    await bot.send_message(i[0], f"F:{a.get('from')}\nT:{i[1]}\nS:{a.get('subject')}\nD:{a.get('date')}\n{a.get('text')}")
+
+
 async def callback(ch, method, properties, body):
     a = json.loads(body)
     await db.database.connect()
@@ -45,7 +50,7 @@ async def callback(ch, method, properties, body):
                     res = dict(*res)
                     await db.database.execute(query, {
                         "mail":res["id"], 
-                        "text":a["text"] if len(a["text"]) < 250 else: a["text"][:250], 
+                        "text":a["text"] if len(a["text"]) < 250 else a["text"][:250], 
                         "from_user":i[0], 
                         "date":datetime.strptime(a["date"],"%a, %d %b %Y %H:%M:%S %z").replace(tzinfo=None)
                     })
@@ -54,20 +59,23 @@ async def callback(ch, method, properties, body):
                     to.append(str(res["owner"]) + "@" + i[0])
 
     await db.database.disconnect()
-    # print(to)
-    for i in to:
-        i = i.split("@")
-        await bot.send_message(i[0], f"F:{a.get('from')}\nT:{i[1]}\nS:{a.get('subject')}\nD:{a.get('date')}\n{a.get('text')}")
+    if to:
+        tasks = [asyncio.ensure_future(sending_messages(a, i)) for i in to]
+        await asyncio.wait(tasks)
 
-
+    return
     # print( " [x] Received %r" % (a,))
     # print(a["text"])
     # ch.basic_ack(delivery_tag = method.delivery_tag)
 
 
 def main(ch, method, properties, body):
-    asyncio.run(callback(ch, method, properties, body))
+    global loop
+    loop.run_until_complete(callback(ch, method, properties, body))
+    # asyncio.run(callback(ch, method, properties, body))
 
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
 channel.basic_qos(prefetch_count=1)
 channel.basic_consume(on_message_callback=main,
                       queue='mails',
